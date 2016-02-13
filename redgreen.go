@@ -4,12 +4,16 @@ import (
 	"flag"
 	"log"
 	"os/exec"
+	"time"
 
 	"github.com/go-fsnotify/fsnotify"
 	"github.com/nsf/termbox-go"
 )
 
-var debug = flag.Bool("debug", false, "enable debug mode, disable termbox")
+var (
+	debug   = flag.Bool("debug", false, "enable debug mode, disable termbox")
+	timeout = flag.Duration("timeout", 5*time.Second, "maximum time to wait for command to finish")
+)
 
 var command []string
 
@@ -25,6 +29,9 @@ func run() error {
 		log.Printf("output: %s", out)
 		return err
 	}
+	time.AfterFunc(*timeout, func() {
+		cmd.Process.Kill()
+	})
 	return cmd.Run()
 }
 
