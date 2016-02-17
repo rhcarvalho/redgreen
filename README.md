@@ -7,7 +7,7 @@ terminal. It is meant to be used in TDD sessions in a Coding Dojo.
 
 You will need to [install](https://golang.org/doc/install) the
 [Go](https://golang.org/) tools to compile `redgreen` from source.
-Next, use the `go` tool to download and compile and install `redgreen`:
+Next, use the `go` tool to download, compile and install `redgreen`:
 
 ```console
 $ go get github.com/rhcarvalho/redgreen
