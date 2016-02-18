@@ -3,7 +3,10 @@ package redgreen
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
@@ -172,5 +175,193 @@ func isSignal(want syscall.Signal) checkFunc {
 			return fmt.Errorf("got %v, want %v", got, want)
 		}
 		return nil
+	}
+}
+
+func TestWatchBadPath(t *testing.T) {
+	done := make(chan struct{})
+	path := "does/not/exist"
+	_, err := Watch(done, path)
+	if err == nil {
+		t.Fatalf("Watch(done, %q) = %v, want not nil", path, err)
+	}
+}
+
+func TestWatchDoneBlockedOnIn(t *testing.T) {
+	path, err := ioutil.TempDir("", "redgreen")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(path)
+
+	done := make(chan struct{})
+	out, err := Watch(done, path)
+	if err != nil {
+		t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
+	}
+
+	// No file system events should have been triggered, Watch's goroutine
+	// is blocked on receiving events.
+
+	// Signal that we are done.
+	close(done)
+
+	// Ensure that out is eventually closed.
+	mustBeClosedTimeoutESC(out, time.Second, t)
+}
+
+func TestWatchDoneBlockedOnOut(t *testing.T) {
+	var outWasOpen, outWasClosed bool
+	test := func() {
+		path, err := ioutil.TempDir("", "redgreen")
+		if err != nil {
+			t.Fatalf("create temp dir: %v", err)
+		}
+		defer os.RemoveAll(path)
+
+		done := make(chan struct{})
+		out, err := Watch(done, path)
+		if err != nil {
+			t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
+		}
+
+		// Create a file to trigger a watch event, but never receive from out,
+		// so that Watch's goroutine is blocked on the send operation.
+		_, err = os.Create(filepath.Join(path, "foo"))
+		if err != nil {
+			t.Fatalf("create temp file: %v", err)
+		}
+
+		// Signal that we are done.
+		close(done)
+
+		// Ensure that out is eventually closed.
+		timeout := time.Second
+		select {
+		case _, isOpen := <-out:
+			// Since we receive from out here, we can observe that
+			// the receive operation either succeed or not with
+			// equal probability.
+			if isOpen {
+				outWasOpen = true
+			} else {
+				outWasClosed = true
+			}
+		case <-time.After(timeout):
+			t.Fatalf("receive from channel timed out")
+		}
+		mustBeClosedTimeoutESC(out, timeout, t)
+	}
+	var runs int
+	for !(outWasOpen && outWasClosed) {
+		// 2 or 3 runs should be enough. The probability of needing more
+		// than 16 runs to observe both outWasOpen and outWasClosed is
+		// (1/2)^16 ≈ 0.001
+		if runs > 16 {
+			t.Fatalf("failed to observe both conditions: outWasOpen=%v, outWasClosed=%v", outWasOpen, outWasClosed)
+		}
+		test()
+		runs++
+	}
+	t.Logf("#runs: %d", runs)
+}
+
+func TestWatchNewFile(t *testing.T) {
+	path, err := ioutil.TempDir("", "redgreen")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(path)
+
+	done := make(chan struct{})
+	defer close(done)
+	out, err := Watch(done, path)
+	if err != nil {
+		t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
+	}
+
+	// Creating a file should trigger a watch event.
+	_, err = os.Create(filepath.Join(path, "foo"))
+	if err != nil {
+		t.Fatalf("create temp file: %v", err)
+	}
+	select {
+	case <-out:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for watch event")
+	}
+}
+
+func TestWatchRemoveFile(t *testing.T) {
+	path, err := ioutil.TempDir("", "redgreen")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(path)
+	_, err = os.Create(filepath.Join(path, "foo"))
+	if err != nil {
+		t.Fatalf("create temp file: %v", err)
+	}
+
+	done := make(chan struct{})
+	defer close(done)
+	out, err := Watch(done, path)
+	if err != nil {
+		t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
+	}
+
+	// Removing a file should trigger a watch event.
+	err = os.Remove(filepath.Join(path, "foo"))
+	if err != nil {
+		t.Fatalf("remove temp file: %v", err)
+	}
+	select {
+	case <-out:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for watch event")
+	}
+}
+
+func TestWatchModifyFile(t *testing.T) {
+	path, err := ioutil.TempDir("", "redgreen")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(path)
+	f, err := os.Create(filepath.Join(path, "foo"))
+	if err != nil {
+		t.Fatalf("create temp file: %v", err)
+	}
+
+	done := make(chan struct{})
+	defer close(done)
+	out, err := Watch(done, path)
+	if err != nil {
+		t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
+	}
+
+	// Modifying a file should trigger a watch event.
+	f.WriteString("test")
+	err = f.Sync()
+	if err != nil {
+		t.Fatalf("sync temp file: %v", err)
+	}
+	select {
+	case <-out:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for watch event")
+	}
+}
+
+// mustBeClosedTimeoutESC is like mustBeClosedTimeout but takes a channel of
+// empty structs.
+func mustBeClosedTimeoutESC(ch <-chan struct{}, timeout time.Duration, t *testing.T) {
+	select {
+	case _, isOpen := <-ch:
+		if isOpen {
+			t.Fatalf("channel is open, want closed")
+		}
+	case <-time.After(timeout):
+		t.Fatalf("receive from channel timed out")
 	}
 }

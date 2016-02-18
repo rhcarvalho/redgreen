@@ -2,8 +2,12 @@ package redgreen
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"os/exec"
 	"time"
+
+	"github.com/go-fsnotify/fsnotify"
 )
 
 // RunSpec holds the specification of a command to be run.
@@ -55,4 +59,38 @@ func run(command []string, timeout time.Duration) error {
 		defer time.AfterFunc(timeout, func() { cmd.Process.Kill() }).Stop()
 	}
 	return cmd.Wait()
+}
+
+// Watch returns a channel that will be sent to once for every file system event
+// in path (non-recursively). Closing done interrupts the file system watcher
+// and closes the output channel, freeing all allocated resources.
+func Watch(done <-chan struct{}, path string) (<-chan struct{}, error) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, fmt.Errorf("create file system watcher: %v", err)
+	}
+	err = watcher.Add(path)
+	if err != nil {
+		return nil, fmt.Errorf("add path %q to file system watcher: %v", path, err)
+	}
+	out := make(chan struct{})
+	go func() {
+		defer close(out)
+		defer watcher.Close()
+		for {
+			select {
+			case <-watcher.Events:
+				select {
+				case out <- struct{}{}:
+				case <-done:
+					return
+				}
+			case err := <-watcher.Errors:
+				log.Println("ERROR:", err)
+			case <-done:
+				return
+			}
+		}
+	}()
+	return out, nil
 }
