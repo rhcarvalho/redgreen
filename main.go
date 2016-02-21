@@ -42,6 +42,7 @@ func do() error {
 	done := make(chan struct{})
 	defer close(done)
 
+	// Initialize and defer termination of termbox.
 	if !debug {
 		if err := termbox.Init(); err != nil {
 			return err
@@ -59,7 +60,7 @@ func do() error {
 	runSpec := redgreen.RunSpec{Command: testCommand, Timeout: timeout}
 
 	run := make(chan redgreen.RunSpec, 1)
-	// Run test command at least once.
+	// Trigger an initial run of the test command.
 	run <- runSpec
 	// Run tests every time a file is created/removed/modified.
 	go func() {
