@@ -16,14 +16,20 @@ type RunSpec struct {
 	Timeout time.Duration
 }
 
+// RunResult holds information about a command execution.
+type RunResult struct {
+	Error error
+	// CombinedOutput []byte
+}
+
 // Run runs commands coming from the in channel in a new goroutine and returns a
-// channel of errors of each execution. Input and output is synchronized, a new
+// channel of results of each execution. Input and output is synchronized, a new
 // command will be executed only after the error returned by the previous
 // execution is consumed downstream. Closing either done or in signals that no
 // more commands are to be run, and, consequently, the output channel will be
 // closed.
-func Run(done <-chan struct{}, in <-chan RunSpec) <-chan error {
-	out := make(chan error)
+func Run(done <-chan struct{}, in <-chan RunSpec) <-chan RunResult {
+	out := make(chan RunResult)
 	go func() {
 		defer close(out)
 		for {
@@ -32,8 +38,9 @@ func Run(done <-chan struct{}, in <-chan RunSpec) <-chan error {
 				if !ok {
 					return
 				}
+				r := RunResult{run(spec.Command, spec.Timeout)}
 				select {
-				case out <- run(spec.Command, spec.Timeout):
+				case out <- r:
 				case <-done:
 					return
 				}

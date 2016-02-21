@@ -19,8 +19,8 @@ func TestRunDoneBlockedOnIn(t *testing.T) {
 
 	// Test the execution of a single command.
 	in <- RunSpec{Command: []string{"true"}}
-	if err := <-out; err != nil {
-		t.Fatalf("got %#v, want nil", err)
+	if res := <-out; res.Error != nil {
+		t.Fatalf("got %#v, want nil", res.Error)
 	}
 
 	// There is no more input, Run's goroutine should be blocked on
@@ -90,7 +90,7 @@ func TestRunClosedInput(t *testing.T) {
 	mustBeClosedTimeout(out, time.Second, t)
 }
 
-func mustBeClosedTimeout(ch <-chan error, timeout time.Duration, t *testing.T) {
+func mustBeClosedTimeout(ch <-chan RunResult, timeout time.Duration, t *testing.T) {
 	select {
 	case _, isOpen := <-ch:
 		if isOpen {
