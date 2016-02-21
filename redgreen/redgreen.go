@@ -175,8 +175,22 @@ func render(s State) {
 	} else {
 		termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 		buf := termbox.CellBuffer()
-		for i := range buf {
-			buf[i].Bg = termbox.Attribute(color)
+		w, _ := termbox.Size()
+		for i := range buf[:w] {
+			k := len(s.Results) - i - 1
+			if k < 0 {
+				break
+			}
+			if err := s.Results[k].Error; err == nil {
+				buf[i].Fg = termbox.ColorGreen
+				buf[i].Ch = '✔'
+			} else {
+				buf[i].Fg = termbox.ColorRed
+				buf[i].Ch = '✘'
+			}
+		}
+		for i := range buf[w:] {
+			buf[w+i].Bg = termbox.Attribute(color)
 		}
 		termbox.Flush()
 	}
