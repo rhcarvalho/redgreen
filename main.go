@@ -39,9 +39,6 @@ func main() {
 }
 
 func do() error {
-	done := make(chan struct{})
-	defer close(done)
-
 	// Initialize and defer termination of termbox.
 	if !debug {
 		if err := termbox.Init(); err != nil {
@@ -52,27 +49,40 @@ func do() error {
 		termbox.SetOutputMode(termbox.Output256)
 	}
 
+	// wg waits for all goroutines started by this function to return.
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	// Closing done signals all goroutines to terminate.
+	done := make(chan struct{})
+	defer close(done)
+
 	w, err := redgreen.Watch(done, ".")
 	if err != nil {
 		return err
 	}
 
 	runSpec := redgreen.RunSpec{Command: testCommand, Timeout: timeout}
-
 	run := make(chan redgreen.RunSpec, 1)
+	res := redgreen.Run(done, run)
+
 	// Trigger an initial run of the test command.
 	run <- runSpec
 	// Run tests every time a file is created/removed/modified.
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for range w {
 			run <- runSpec
 		}
 	}()
 
-	res := redgreen.Run(done, run)
-
 	state := make(chan redgreen.State)
-	go redgreen.Render(done, state)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		redgreen.Render(done, state)
+	}()
 
 	s := redgreen.State{Debug: debug}
 	var mu sync.RWMutex // synchronizes access to s.
@@ -80,7 +90,9 @@ func do() error {
 	// Render initial state.
 	state <- s
 	// Render after every test command result.
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for r := range res {
 			mu.Lock()
 			s.Results = append(s.Results, r)
