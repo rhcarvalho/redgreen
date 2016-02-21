@@ -85,9 +85,27 @@ func Watch(done <-chan struct{}, path string) (<-chan struct{}, error) {
 	go func() {
 		defer close(out)
 		defer watcher.Close()
+		// minWriteInterval is the minimum interval between two
+		// sequential writes to the same file to trigger sends to out.
+		// This prevents triggering two events when, e.g., a file is
+		// saved and automatically gofmt'ed.
+		minWriteInterval := 200 * time.Millisecond
+		// lastWrite stores data about the last write event.
+		lastWrite := struct {
+			Name string
+			Time time.Time
+		}{}
 		for {
 			select {
-			case <-watcher.Events:
+			case e := <-watcher.Events:
+				if e.Op&fsnotify.Write == fsnotify.Write {
+					// Ignore quick sequential writes to the same file.
+					if lastWrite.Name == e.Name && time.Now().Sub(lastWrite.Time) < minWriteInterval {
+						continue
+					}
+					lastWrite.Name = e.Name
+					lastWrite.Time = time.Now()
+				}
 				select {
 				case out <- struct{}{}:
 				case <-done:
