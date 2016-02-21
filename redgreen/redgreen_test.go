@@ -365,3 +365,52 @@ func mustBeClosedTimeoutESC(ch <-chan struct{}, timeout time.Duration, t *testin
 		t.Fatalf("receive from channel timed out")
 	}
 }
+
+func TestStateColor(t *testing.T) {
+	var s State
+	checkColor(s, ColorYellow, t)
+	s.Results = append(s.Results, RunResult{})
+	checkColor(s, ColorGreen, t)
+	s.Results = append(s.Results, RunResult{Error: errors.New("test")})
+	checkColor(s, ColorRed, t)
+}
+
+func checkColor(s State, want Color, t *testing.T) {
+	if got := s.Color(); got != want {
+		t.Errorf("s.Color() = %v, want %v", got, want)
+	}
+}
+
+func TestRenderDone(t *testing.T) {
+	done := make(chan struct{})
+	in := make(chan State)
+	ok := make(chan struct{}, 1)
+	go func() {
+		Render(done, in)
+		ok <- struct{}{}
+	}()
+	in <- State{}
+	close(done)
+	select {
+	case <-ok:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting goroutine to return")
+	}
+}
+
+func TestRenderClosedInput(t *testing.T) {
+	done := make(chan struct{})
+	in := make(chan State)
+	ok := make(chan struct{}, 1)
+	go func() {
+		Render(done, in)
+		ok <- struct{}{}
+	}()
+	in <- State{}
+	close(in)
+	select {
+	case <-ok:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting goroutine to return")
+	}
+}

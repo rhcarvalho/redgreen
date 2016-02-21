@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-fsnotify/fsnotify"
+	"github.com/nsf/termbox-go"
 )
 
 // RunSpec holds the specification of a command to be run.
@@ -100,4 +101,83 @@ func Watch(done <-chan struct{}, path string) (<-chan struct{}, error) {
 		}
 	}()
 	return out, nil
+}
+
+// State represents the program state that can be rendered to the screen. If
+// Debug is false, termbox must have been initialized. If Debug is true, termbox
+// is not used.
+type State struct {
+	Results []RunResult
+	Debug   bool
+}
+
+// Color returns the color that represents the state. There are three possible
+// colors: ColorRed means the last test command failed, ColorGreen means the
+// last test command succeeded, and ColorYellow means the state is unknown.
+func (s State) Color() Color {
+	var color Color
+	if len(s.Results) == 0 {
+		color = ColorYellow
+	} else {
+		if s.Results[len(s.Results)-1].Error == nil {
+			color = ColorGreen
+		} else {
+			color = ColorRed
+		}
+	}
+	return color
+}
+
+// A Color represents the state of the program.
+type Color termbox.Attribute
+
+// All possible colors.
+const (
+	ColorRed    = Color(termbox.ColorRed)
+	ColorGreen  = Color(termbox.ColorGreen)
+	ColorYellow = Color(termbox.ColorYellow)
+)
+
+func (c Color) String() string {
+	switch c {
+	case ColorRed:
+		return "red"
+	case ColorGreen:
+		return "green"
+	case ColorYellow:
+		return "yellow"
+	default:
+		return "unknown"
+	}
+}
+
+// Render receives updates to the program state from in, and updates the screen
+// accordingly. Render blocks until either done or in is closed.
+func Render(done <-chan struct{}, in <-chan State) {
+	for {
+		select {
+		case s, ok := <-in:
+			if !ok {
+				return
+			}
+			render(s)
+		case <-done:
+			return
+		}
+	}
+}
+
+// render updates the screen according to s.
+func render(s State) {
+	color := s.Color()
+	if s.Debug {
+		log.Printf("render: %v", color)
+	} else {
+		termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+		buf := termbox.CellBuffer()
+		for i := range buf {
+			buf[i].Bg = termbox.Attribute(color)
+		}
+		termbox.Flush()
+	}
 }
