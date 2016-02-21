@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
 	"github.com/nsf/termbox-go"
@@ -73,13 +74,19 @@ func do() error {
 	go redgreen.Render(done, state)
 
 	s := redgreen.State{Debug: debug}
+	var mu sync.RWMutex // synchronizes access to s.
+
 	// Render initial state.
 	state <- s
 	// Render after every test command result.
 	go func() {
 		for r := range res {
+			mu.Lock()
 			s.Results = append(s.Results, r)
+			mu.Unlock()
+			mu.RLock()
 			state <- s
+			mu.RUnlock()
 		}
 	}()
 
@@ -94,6 +101,11 @@ func do() error {
 			e := termbox.PollEvent()
 			if e.Type == termbox.EventKey && e.Key == termbox.KeyEsc {
 				break
+			}
+			if e.Type == termbox.EventResize {
+				mu.RLock()
+				state <- s
+				mu.RUnlock()
 			}
 		}
 	}
