@@ -28,9 +28,8 @@ func main() {
 	flag.Parse()
 
 	// Customize testCommand if passed as arguments.
-	args := flag.Args()
-	if len(args) > 0 {
-		testCommand = args
+	if flag.NArg() > 0 {
+		testCommand = flag.Args()
 	}
 
 	if err := do(); err != nil {
