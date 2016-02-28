@@ -82,10 +82,13 @@ func run(command []string, timeout time.Duration, debug bool) error {
 	return cmd.Wait()
 }
 
-// Watch returns a channel that will be sent to once for every file system event
-// in path (non-recursively). Closing done interrupts the file system watcher
-// and closes the output channel, freeing all allocated resources.
-func Watch(done <-chan struct{}, path string) (<-chan struct{}, error) {
+// Watch returns a channel that will be sent to after file system events in path
+// (non-recursively). Send operations happen after a certain delay, debouncing
+// multiple events within the delay. This is useful to group together multiple
+// related events, such as what happens when a file is saved and immediately
+// automatically gofmt'ed. Closing done interrupts the file system watcher and
+// closes the output channel, freeing all allocated resources.
+func Watch(done <-chan struct{}, path string, delay time.Duration) (<-chan struct{}, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("create file system watcher: %v", err)
@@ -98,32 +101,29 @@ func Watch(done <-chan struct{}, path string) (<-chan struct{}, error) {
 	go func() {
 		defer close(out)
 		defer watcher.Close()
-		// minWriteInterval is the minimum interval between two
-		// sequential writes to the same file to trigger sends to out.
-		// This prevents triggering two events when, e.g., a file is
-		// saved and automatically gofmt'ed.
-		minWriteInterval := 200 * time.Millisecond
-		// lastWrite stores data about the last write event.
-		lastWrite := struct {
-			Name string
-			Time time.Time
-		}{}
+		// timer holds a scheduled send to out.
+		var timer *time.Timer
+		// stopTimer stops the timer if non-nil.
+		stopTimer := func() {
+			if timer != nil {
+				timer.Stop()
+			}
+		}
+		// Abort any previously scheduled send before returning.
+		defer stopTimer()
 		for {
 			select {
-			case e := <-watcher.Events:
-				if e.Op&fsnotify.Write == fsnotify.Write {
-					// Ignore quick sequential writes to the same file.
-					if lastWrite.Name == e.Name && time.Now().Sub(lastWrite.Time) < minWriteInterval {
-						continue
+			case <-watcher.Events:
+				// Abort any previously scheduled send.
+				stopTimer()
+				// Schedule send to out.
+				timer = time.AfterFunc(delay, func() {
+					select {
+					case out <- struct{}{}:
+					case <-done:
+						return
 					}
-					lastWrite.Name = e.Name
-					lastWrite.Time = time.Now()
-				}
-				select {
-				case out <- struct{}{}:
-				case <-done:
-					return
-				}
+				})
 			case err := <-watcher.Errors:
 				log.Println("ERROR:", err)
 			case <-done:

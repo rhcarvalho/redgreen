@@ -56,7 +56,7 @@ func do() error {
 	done := make(chan struct{})
 	defer close(done)
 
-	w, err := redgreen.Watch(done, ".")
+	w, err := redgreen.Watch(done, ".", 200*time.Millisecond)
 	if err != nil {
 		return err
 	}

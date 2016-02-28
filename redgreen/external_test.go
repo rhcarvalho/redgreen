@@ -103,9 +103,9 @@ func mustBeClosedTimeout(ch <-chan redgreen.RunResult, timeout time.Duration, t 
 func TestWatchBadPath(t *testing.T) {
 	done := make(chan struct{})
 	path := "does/not/exist"
-	_, err := redgreen.Watch(done, path)
+	_, err := redgreen.Watch(done, path, 0)
 	if err == nil {
-		t.Fatalf("Watch(done, %q) = %v, want not nil", path, err)
+		t.Fatalf("Watch(done, %q, 0) = %v, want not nil", path, err)
 	}
 }
 
@@ -117,9 +117,9 @@ func TestWatchDoneBlockedOnIn(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	done := make(chan struct{})
-	out, err := redgreen.Watch(done, path)
+	out, err := redgreen.Watch(done, path, 0)
 	if err != nil {
-		t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
+		t.Fatalf("Watch(done, %q, 0) = %v, want nil", path, err)
 	}
 
 	// No file system events should have been triggered, Watch's goroutine
@@ -143,9 +143,9 @@ func TestWatchDoneBlockedOnOut(t *testing.T) {
 		defer os.RemoveAll(path)
 
 		done := make(chan struct{})
-		out, err := redgreen.Watch(done, path)
+		out, err := redgreen.Watch(done, path, 0)
 		if err != nil {
-			t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
+			t.Fatalf("Watch(done, %q, 0) = %v, want nil", path, err)
 		}
 
 		// Create a file to trigger a watch event, but never receive from out,
@@ -198,9 +198,9 @@ func TestWatchNewFile(t *testing.T) {
 
 	done := make(chan struct{})
 	defer close(done)
-	out, err := redgreen.Watch(done, path)
+	out, err := redgreen.Watch(done, path, 0)
 	if err != nil {
-		t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
+		t.Fatalf("Watch(done, %q, 0) = %v, want nil", path, err)
 	}
 
 	// Creating a file should trigger a watch event.
@@ -228,9 +228,9 @@ func TestWatchRemoveFile(t *testing.T) {
 
 	done := make(chan struct{})
 	defer close(done)
-	out, err := redgreen.Watch(done, path)
+	out, err := redgreen.Watch(done, path, 0)
 	if err != nil {
-		t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
+		t.Fatalf("Watch(done, %q, 0) = %v, want nil", path, err)
 	}
 
 	// Removing a file should trigger a watch event.
@@ -258,9 +258,9 @@ func TestWatchModifyFile(t *testing.T) {
 
 	done := make(chan struct{})
 	defer close(done)
-	out, err := redgreen.Watch(done, path)
+	out, err := redgreen.Watch(done, path, 0)
 	if err != nil {
-		t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
+		t.Fatalf("Watch(done, %q, 0) = %v, want nil", path, err)
 	}
 
 	// Modifying a file should trigger a watch event.
