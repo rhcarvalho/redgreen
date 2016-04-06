@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/go-fsnotify/fsnotify"
+	"github.com/fsnotify/fsnotify"
 	"github.com/nsf/termbox-go"
 )
 
