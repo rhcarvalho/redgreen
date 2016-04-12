@@ -1,24 +1,23 @@
-package redgreen
+package redgreen_test
 
 import (
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"syscall"
 	"testing"
 	"time"
+
+	"github.com/rhcarvalho/redgreen/redgreen"
 )
 
 func TestRunDoneBlockedOnIn(t *testing.T) {
 	done := make(chan struct{})
-	in := make(chan RunSpec)
-	out := Run(done, in)
+	in := make(chan redgreen.RunSpec)
+	out := redgreen.Run(done, in)
 
 	// Test the execution of a single command.
-	in <- RunSpec{Command: []string{"true"}}
+	in <- redgreen.RunSpec{Command: []string{"true"}}
 	if res := <-out; res.Error != nil {
 		t.Fatalf("got %#v, want nil", res.Error)
 	}
@@ -37,12 +36,12 @@ func TestRunDoneBlockedOnOut(t *testing.T) {
 	var outWasOpen, outWasClosed bool
 	test := func() {
 		done := make(chan struct{})
-		in := make(chan RunSpec)
-		out := Run(done, in)
+		in := make(chan redgreen.RunSpec)
+		out := redgreen.Run(done, in)
 
 		// Send a single command but don't receive from out, so that
 		// Run's goroutine will be blocked on sending to out.
-		in <- RunSpec{Command: []string{"true"}}
+		in <- redgreen.RunSpec{Command: []string{"true"}}
 
 		// Signal that we are done.
 		close(done)
@@ -80,8 +79,8 @@ func TestRunDoneBlockedOnOut(t *testing.T) {
 
 func TestRunClosedInput(t *testing.T) {
 	done := make(chan struct{})
-	in := make(chan RunSpec)
-	out := Run(done, in)
+	in := make(chan redgreen.RunSpec)
+	out := redgreen.Run(done, in)
 
 	// Signal that there will be no more input.
 	close(in)
@@ -90,7 +89,7 @@ func TestRunClosedInput(t *testing.T) {
 	mustBeClosedTimeout(out, time.Second, t)
 }
 
-func mustBeClosedTimeout(ch <-chan RunResult, timeout time.Duration, t *testing.T) {
+func mustBeClosedTimeout(ch <-chan redgreen.RunResult, timeout time.Duration, t *testing.T) {
 	select {
 	case _, isOpen := <-ch:
 		if isOpen {
@@ -101,87 +100,10 @@ func mustBeClosedTimeout(ch <-chan RunResult, timeout time.Duration, t *testing.
 	}
 }
 
-func Test_run(t *testing.T) {
-	tests := []struct {
-		command []string
-		timeout time.Duration
-		check   checkFunc
-	}{
-		{
-			command: []string{},
-			check: func(err error) error {
-				got := err.Error()
-				want := "command must not be empty"
-				if got != want {
-					return fmt.Errorf("got %v, want %v", got, want)
-				}
-				return nil
-			},
-		},
-		{
-			command: []string{"invalid command"},
-			check:   isExecError,
-		},
-		{
-			command: []string{"true"},
-			check:   isNil,
-		},
-		{
-			command: []string{"false"},
-			check:   isSignal(-1),
-		},
-		{
-			command: []string{"sleep", "2"},
-			timeout: 1 * time.Nanosecond,
-			check:   isSignal(syscall.SIGKILL),
-		},
-	}
-	for _, tt := range tests {
-		err := run(tt.command, tt.timeout)
-		if checkErr := tt.check(err); checkErr != nil {
-			t.Errorf("run(%v, %v): %v", tt.command, tt.timeout, checkErr)
-		}
-	}
-}
-
-// checkFunc takes an error and returns another error if the given error does
-// not satisfy a certain condition.
-type checkFunc func(error) error
-
-func isNil(err error) error {
-	if err != nil {
-		return fmt.Errorf("got %T (%[1]v), want nil", err)
-	}
-	return nil
-}
-func isExecError(err error) error {
-	if _, ok := err.(*exec.Error); !ok {
-		return fmt.Errorf("got %T (%[1]v), want *exec.Error", err)
-	}
-	return nil
-}
-func isSignal(want syscall.Signal) checkFunc {
-	return func(err error) error {
-		exitErr, ok := err.(*exec.ExitError)
-		if !ok {
-			return fmt.Errorf("got %T (%[1]v), want *exec.ExitError", err)
-		}
-		status, ok := exitErr.Sys().(syscall.WaitStatus)
-		if !ok {
-			return errors.New("cannot check proccess status")
-		}
-		got := status.Signal()
-		if got != want {
-			return fmt.Errorf("got %v, want %v", got, want)
-		}
-		return nil
-	}
-}
-
 func TestWatchBadPath(t *testing.T) {
 	done := make(chan struct{})
 	path := "does/not/exist"
-	_, err := Watch(done, path)
+	_, err := redgreen.Watch(done, path)
 	if err == nil {
 		t.Fatalf("Watch(done, %q) = %v, want not nil", path, err)
 	}
@@ -195,7 +117,7 @@ func TestWatchDoneBlockedOnIn(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	done := make(chan struct{})
-	out, err := Watch(done, path)
+	out, err := redgreen.Watch(done, path)
 	if err != nil {
 		t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
 	}
@@ -221,7 +143,7 @@ func TestWatchDoneBlockedOnOut(t *testing.T) {
 		defer os.RemoveAll(path)
 
 		done := make(chan struct{})
-		out, err := Watch(done, path)
+		out, err := redgreen.Watch(done, path)
 		if err != nil {
 			t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
 		}
@@ -276,7 +198,7 @@ func TestWatchNewFile(t *testing.T) {
 
 	done := make(chan struct{})
 	defer close(done)
-	out, err := Watch(done, path)
+	out, err := redgreen.Watch(done, path)
 	if err != nil {
 		t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
 	}
@@ -306,7 +228,7 @@ func TestWatchRemoveFile(t *testing.T) {
 
 	done := make(chan struct{})
 	defer close(done)
-	out, err := Watch(done, path)
+	out, err := redgreen.Watch(done, path)
 	if err != nil {
 		t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
 	}
@@ -336,7 +258,7 @@ func TestWatchModifyFile(t *testing.T) {
 
 	done := make(chan struct{})
 	defer close(done)
-	out, err := Watch(done, path)
+	out, err := redgreen.Watch(done, path)
 	if err != nil {
 		t.Fatalf("Watch(done, %q) = %v, want nil", path, err)
 	}
@@ -368,15 +290,15 @@ func mustBeClosedTimeoutESC(ch <-chan struct{}, timeout time.Duration, t *testin
 }
 
 func TestStateColor(t *testing.T) {
-	var s State
-	checkColor(s, ColorYellow, t)
-	s.Results = append(s.Results, RunResult{})
-	checkColor(s, ColorGreen, t)
-	s.Results = append(s.Results, RunResult{Error: errors.New("test")})
-	checkColor(s, ColorRed, t)
+	var s redgreen.State
+	checkColor(s, redgreen.ColorYellow, t)
+	s.Results = append(s.Results, redgreen.RunResult{})
+	checkColor(s, redgreen.ColorGreen, t)
+	s.Results = append(s.Results, redgreen.RunResult{Error: errors.New("test")})
+	checkColor(s, redgreen.ColorRed, t)
 }
 
-func checkColor(s State, want Color, t *testing.T) {
+func checkColor(s redgreen.State, want redgreen.Color, t *testing.T) {
 	if got := s.Color(); got != want {
 		t.Errorf("s.Color() = %v, want %v", got, want)
 	}
@@ -384,13 +306,13 @@ func checkColor(s State, want Color, t *testing.T) {
 
 func TestRenderDone(t *testing.T) {
 	done := make(chan struct{})
-	in := make(chan State)
+	in := make(chan redgreen.State)
 	ok := make(chan struct{}, 1)
 	go func() {
-		Render(done, in)
+		redgreen.Render(done, in)
 		ok <- struct{}{}
 	}()
-	in <- State{}
+	in <- redgreen.State{}
 	close(done)
 	select {
 	case <-ok:
@@ -401,13 +323,13 @@ func TestRenderDone(t *testing.T) {
 
 func TestRenderClosedInput(t *testing.T) {
 	done := make(chan struct{})
-	in := make(chan State)
+	in := make(chan redgreen.State)
 	ok := make(chan struct{}, 1)
 	go func() {
-		Render(done, in)
+		redgreen.Render(done, in)
 		ok <- struct{}{}
 	}()
-	in <- State{}
+	in <- redgreen.State{}
 	close(in)
 	select {
 	case <-ok:
