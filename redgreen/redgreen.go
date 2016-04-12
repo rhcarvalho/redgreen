@@ -1,10 +1,13 @@
 package redgreen
 
 import (
+	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -39,7 +42,10 @@ func Run(done <-chan struct{}, in <-chan RunSpec) <-chan RunResult {
 				if !ok {
 					return
 				}
-				r := RunResult{run(spec.Command, spec.Timeout)}
+				// FIXME: expose the debug flag properly.
+				debugFlag := flag.Lookup("debug")
+				debug := debugFlag != nil && debugFlag.Value.String() == "true"
+				r := RunResult{run(spec.Command, spec.Timeout, debug)}
 				select {
 				case out <- r:
 				case <-done:
@@ -55,11 +61,18 @@ func Run(done <-chan struct{}, in <-chan RunSpec) <-chan RunResult {
 
 // run runs command and waits for it to terminate for at most timeout. Zero or
 // negative timeout means no timeout.
-func run(command []string, timeout time.Duration) error {
+func run(command []string, timeout time.Duration, debug bool) error {
 	if len(command) == 0 {
 		return errors.New("command must not be empty")
 	}
 	cmd := exec.Command(command[0], command[1:]...)
+	if debug {
+		var b bytes.Buffer
+		fmt.Fprintln(&b, strings.Join(cmd.Args, " "))
+		cmd.Stdout = &b
+		cmd.Stderr = &b
+		defer func() { log.Print(b.String()) }()
+	}
 	if err := cmd.Start(); err != nil {
 		return err
 	}

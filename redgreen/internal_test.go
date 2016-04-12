@@ -45,7 +45,7 @@ func Test_run(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		err := run(tt.command, tt.timeout)
+		err := run(tt.command, tt.timeout, false)
 		if checkErr := tt.check(err); checkErr != nil {
 			t.Errorf("run(%v, %v): %v", tt.command, tt.timeout, checkErr)
 		}
