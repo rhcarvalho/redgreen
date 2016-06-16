@@ -72,7 +72,7 @@ func run(command []string, timeout time.Duration, debug bool) (err error) {
 		cmd.Stdout = &b
 		cmd.Stderr = &b
 		defer func() {
-			log.Println(b.String())
+			log.Printf("output:\n%s", b.String())
 			if err != nil {
 				log.Println("error:", err)
 			}
