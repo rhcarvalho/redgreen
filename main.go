@@ -20,8 +20,8 @@ var (
 )
 
 func init() {
-	flag.BoolVar(&debug, "debug", false, "enable debug mode, disable termbox")
-	flag.DurationVar(&timeout, "timeout", 5*time.Second, "maximum time to wait for command to finish")
+	flag.BoolVar(&debug, "debug", false, "Enable debug mode, disable termbox.")
+	flag.DurationVar(&timeout, "timeout", 5*time.Second, "Maximum time to wait for command to finish. Set to 0 to disable.")
 }
 
 func main() {
