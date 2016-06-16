@@ -61,17 +61,22 @@ func Run(done <-chan struct{}, in <-chan RunSpec) <-chan RunResult {
 
 // run runs command and waits for it to terminate for at most timeout. Zero or
 // negative timeout means no timeout.
-func run(command []string, timeout time.Duration, debug bool) error {
+func run(command []string, timeout time.Duration, debug bool) (err error) {
 	if len(command) == 0 {
 		return errors.New("command must not be empty")
 	}
 	cmd := exec.Command(command[0], command[1:]...)
 	if debug {
+		log.Printf("running: %s", strings.Join(cmd.Args, " "))
 		var b bytes.Buffer
-		fmt.Fprintln(&b, strings.Join(cmd.Args, " "))
 		cmd.Stdout = &b
 		cmd.Stderr = &b
-		defer func() { log.Print(b.String()) }()
+		defer func() {
+			log.Println(b.String())
+			if err != nil {
+				log.Println("error:", err)
+			}
+		}()
 	}
 	if err := cmd.Start(); err != nil {
 		return err
