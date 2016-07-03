@@ -14,6 +14,32 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
+// TimeoutError represents a timeout error.
+type TimeoutError time.Duration
+
+func (e TimeoutError) Error() string {
+	return "timed out after " + time.Duration(e).String()
+}
+
+// RunWithTimeout runs cmd limiting the execution time with a timeout. If the
+// timeout is reached, the process gets killed and a TimeoutError is returned.
+func RunWithTimeout(cmd *exec.Cmd, timeout time.Duration) error {
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	e := make(chan error, 1)
+	go func() {
+		e <- cmd.Wait()
+	}()
+	select {
+	case err := <-e:
+		return err
+	case <-time.After(timeout):
+		cmd.Process.Kill()
+		return TimeoutError(timeout)
+	}
+}
+
 // RunSpec holds the specification of a command to be run.
 type RunSpec struct {
 	Command []string
