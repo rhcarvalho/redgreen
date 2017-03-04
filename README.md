@@ -3,6 +3,8 @@
 This is a simple tool to execute tests and show a red or green background in a
 terminal. It is meant to be used in TDD sessions in a Coding Dojo.
 
+![Screenshot of redgreen in action](screenshot.png)
+
 ## Installation
 
 You will need to [install](https://golang.org/doc/install) the
