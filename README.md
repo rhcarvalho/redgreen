@@ -24,7 +24,7 @@ By default, starting `redgreen` will run `go test` in the current directory and
 will rerun the test command every time a file changes, updating the background
 color accordingly.
 
-You can specify a different test command as arguments:
+You can specify a different test command by passing positional arguments:
 
 ```console
 $ redgreen go test
@@ -33,10 +33,20 @@ $ redgreen rake test
 ```
 
 It is recommend to run `redgreen` in a small terminal window configured as
-"Always on Top". If you are using Gnome and Gnome Terminal, right-click anywhere
-in the middle of the terminal screen and uncheck the checkbox "Show Menubar",
-next click on the window title bar and choose "Always on Top". Resize the window
-to a small size and drag it to a corner where it doesn't bother the view to your
-code editor.
+*Always on Top*. For example, on GNOME Terminal, right-click anywhere in the
+middle of the terminal screen and uncheck the box *Show Menubar*, then click on
+the window title bar and choose *Always on Top*. Resize the window to a small
+size and drag it to a corner where it doesn't bother the view to your code
+editor.
 
-To exit, press the `Esc` key.
+If you are a `tmux` user you can split your terminal and see code and test
+status in a single window, like the screenshot above:
+
+```console
+$ tmux new-session \; set status off \; split-window -hp 20 redgreen \; last-pane
+```
+
+You can use any other way to split your terminal window or organize your windows
+to add `redgreen` to your testing flow.
+
+To stop `redgreen` and **exit**, press the `Esc` key.
